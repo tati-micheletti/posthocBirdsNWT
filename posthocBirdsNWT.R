@@ -96,7 +96,10 @@ defineModule(sim, list(
                            "of spatial variation")),
     defineParameter("useFuture", "logical", FALSE, NA, NA, 
                     paste0("Should future (parallel processing)",
-                           "be used for the calculations?"))
+                           "be used for the calculations?")),
+    defineParameter("shpFieldToUse", "character", "REGION_NAM", NA, NA, 
+                    paste0("Which field of the shapefile indicates spatial",
+                           "units to be used for plotting and summarizing?"))
   ),
   inputObjects = bind_rows(
     expectsInput(objectName = "dataFolder", objectClass = "list", 
@@ -206,6 +209,9 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
                                                useFuture = P(sim)$useFuture)
       sim$colonizationRasters <- colonizationRastersAndTable[["colRasters"]] 
       sim$colonizationTable <- colonizationRastersAndTable[["colTable"]]
+      
+      # UNFINISHED. This function will calculate which species colonized and which
+      # species disappeared from a pixel with time.
 
     },
     calculatesSignificantChanges = {
@@ -248,17 +254,17 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
       names(sim$differenceRasters) <- names(sim$comparisons)
       
       # This function calculates the differences between the scenarios 
-      # (i.e. LandR.CS_fS and LandR_SCFM) BY run (it uses the 'run' to compare), and then
-      # it takes the average of the differences across runs and standard deviation in the 
-      # form of maps.  
+      # (i.e. LandR.CS_fS and LandR_SCFM) BY run (it uses the 'run' to 
+      # compare), and then it takes the average of the differences 
+      # across runs and standard deviation in the form of maps.  
 
       sim$pixelsSummaries <- makeRastersSummary(listOfRasters = sim$listOfRasters,
                                                 studyArea = sim$studyArea,
-                                                field = "REGION_NAM",
+                                                field = P(sim)$shpFieldToUse,
                                                 years = P(sim)$years)
 
-      # This function calculates the mean, sd, min, max, median of density for each scenario, run, 
-      # year, and species BY location.  
+      # This function calculates the mean, sd, min, max, median of density 
+      # for each scenario, run, year, and species BY location.  
 
     },
     makeGIF = {
@@ -272,7 +278,7 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
                                                  Species = P(sim)$species,
                                                  scenarios = names(sim$comparisons),
                                                  years = P(sim)$years,
-                                                 field = "REGION_NAM",
+                                                 field = P(sim)$shpFieldToUse,
                                                  rasterToMatch = sim$rasterToMatch,
                                                  shp = sim$studyArea,
                                                  overwrite = FALSE)
