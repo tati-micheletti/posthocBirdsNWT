@@ -51,15 +51,22 @@ if (is.null(allRasters)){
           birdYearScenarioSpeciesScen <- lapply(Run, function(run){
             if (SpeciesScenario == "NOT_AVAILABLE")
               speciesScenario <- ""
-            ras <- file.path(predictedRastersFolder, scenario, run, paste0(typeOfSpecies, "Predictions", speciesScenario), 
+            ras <- file.path(predictedRastersFolder, scenario, 
+                             run, paste0(typeOfSpecies, "Predictions", 
+                                         speciesScenario), 
                              ifelse(typeOfSpecies == "bird",
-                                    paste0(run, "_", scenario, "predicted", species, "Year", year, ".tif"),
-                                    paste0("relativeSelectionTaigaPlains_Year", year, ".tif")))
+                                    paste0(run, "_", scenario, "predicted", 
+                                           species, "Year", year, ".tif"),
+                                    paste0("relativeSelectionTaigaPlains_Year",
+                                           year, ".tif")))
             if (file.exists(ras)){
-              message(paste("Raster for", species, year, scenario, speciesScenario, run, "exists. Returning...", collapse = " "))
+              message(paste("Raster for", species, year, scenario, 
+                            speciesScenario, run, "exists. Returning...", 
+                            collapse = " "))
               ras <- raster(ras)
             } else {
-              message("Apparently file doesn't exist. Are you sure the path is correct? ", ras)
+              message(paste0("Apparently file doesn't exist. Are you sure",
+                             " the path is correct? ", ras))
               browser()
             }
             names(ras) <- paste0(species, year, scenario, speciesScenario, run)
@@ -73,7 +80,13 @@ if (is.null(allRasters)){
 }
   
   # 3 birds x 4 years x 3 runs x 8 scenarios = 288 rasters
+   
+  # Only comparing the two extremes: LandR.CS + fS + V6a vs LandR + SCFM + V4
   # --> For paper: 64 birds x 6 years x 10 runs x 2 scenarios = 7,680 rasters
+  
+  # The full on:
+  # --> For paper: 64 birds x 6 years x 10 runs x 16 scenarios = 61,440 rasters
+  
   # 1 caribou x 3 years x 3 runs x 4 scenarios = 36 rasters
   # --> For paper: 1 caribou x 6 years x 10 runs x 2 scenarios = 120 rasters
   # Name the raster list
@@ -103,13 +116,18 @@ if (is.null(allRasters)){
                     sdDifference = file.path(outputFolder,
                                              paste0(sdName, ".tif"))))
       } else {
-        oneYear <- oneSpecies[names(oneSpecies) %in% grepMulti(x = names(oneSpecies), patterns = year)]
+        oneYear <- oneSpecies[names(oneSpecies) %in% 
+                                grepMulti(x = names(oneSpecies), 
+                                          patterns = year)]
         oneRun <- unlist(lapply(Run, FUN = function(run){# future_lapply
-          oneRun <- oneYear[names(oneYear) %in% grepMulti(x = names(oneYear), patterns = run)]
-          group1 <- oneRun[names(oneRun) %in% grepMulti(x = names(oneRun), 
-                                                        patterns = comparisons[[names(comparisons)]][1])]
-          group2 <- oneRun[names(oneRun) %in% grepMulti(x = names(oneRun), 
-                                                        patterns = comparisons[[names(comparisons)]][2])]
+          oneRun <- oneYear[names(oneYear) %in% 
+                              grepMulti(x = names(oneYear), patterns = run)]
+          group1 <- oneRun[names(oneRun) %in% 
+                             grepMulti(x = names(oneRun),
+                                       patterns = comparisons[[names(comparisons)]][1])]
+          group2 <- oneRun[names(oneRun) %in% 
+                             grepMulti(x = names(oneRun),
+                                       patterns = comparisons[[names(comparisons)]][2])]
           if (length(group1) != length(group2))
             stop("The lengths of the groups of rasters don't match. 
                Please debug and make sure the sequence of rasters is correct")
@@ -136,12 +154,16 @@ if (is.null(allRasters)){
         names(averageReps) <- averageName
         names(sdReps) <- sdName
         toc()
-          message("Writting rasters for ", paste(species, year, names(comparisons), collapse = " "))
+          message("Writting rasters for ", paste(species, year, 
+                                                 names(comparisons), 
+                                                 collapse = " "))
           writeRaster(x = averageReps, filename = file.path(outputFolder, 
-                                                            paste0(averageName, ".tif")), 
+                                                            paste0(averageName, 
+                                                                   ".tif")), 
                       format = "GTiff", overwrite = overwrite)
           writeRaster(x = sdReps, filename = file.path(outputFolder, 
-                                                       paste0(sdName, ".tif")), 
+                                                       paste0(sdName, 
+                                                              ".tif")), 
                       format = "GTiff", overwrite = overwrite)
         toc()
         return(list(averageDifference = averageName, 
