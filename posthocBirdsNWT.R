@@ -55,12 +55,6 @@ defineModule(sim, list(
                     paste0("Which patterns should be used to find the rasters in the dataFolder?",
                            "As this is a specific bird's posthoc module, the default is ",
                            "'c('predicted', '.tif')'")),
-    defineParameter("patternsUsedForGrouping", "character", NULL, NA, NA, 
-                    paste0(
-                      "Which patterns should be used to group the rasters?",
-                      "Should be passed as a vector if more than one. If 'NULL', ",
-                      "it uses all rasters as one group -- i.e run1"
-                    )),
     defineParameter("sampleSize", "character|numeric", "auto", NA, NA, 
                     paste0("How many pixels should be used for the bootstrapping as sample size? ",
                            "If 'auto', it uses cohen.d() to calculate an ideal sample size ",
@@ -75,22 +69,16 @@ defineModule(sim, list(
                     paste0("Should the deltas maps be overwritten?")),
     defineParameter("overwriteBootstrap", "logical", FALSE, NA, NA, 
                     paste0("Should the bootstrapping be overwritten?")),
-    defineParameter("makeRSFLikePlot", "logical", FALSE, NA, NA, 
-                    paste0("Should it make the plots like ECCC2011 RSF?")),
     defineParameter("uploadPlots", "logical", FALSE, NA, NA, 
                     paste0("Should the plots be uploaded to ggdrive?")),
     defineParameter("typeOfAnalysis", "character", "generic", NA, NA, 
                     paste0("Type of analysis for naming purposes")),
-    defineParameter("calculateSignificantChanges", "logical", TRUE, NA, NA, 
-                    paste0("Should it calculate significant changes",
-                           " between the first and last rasters ? ",
-                           "It might take a few minutes to hours depending ",
-                           " on your system")),
-    defineParameter("calculateSummary", "logical", TRUE, NA, NA, 
-                    paste0("Should it calculate summary of changes?",
-                           "It might take a few minutes to hours depending ",
-                           " on your system")),
-    defineParameter("plotCI", "logical", FALSE, NA, NA, 
+    defineParameter("eventsToSchedule", "character", c("makeDeltaRasters","makeSummary",
+                                                       "averageThroughTimeComparison"), 
+                    NA, NA, 
+                    paste0("Which events should happen?",
+                           " Defaults to basic ones")),
+     defineParameter("plotCI", "logical", FALSE, NA, NA, 
                     paste0("Should it plot the CI",
                            " on the average through time plots? Remember there is a lot ",
                            "of spatial variation")),
@@ -99,7 +87,11 @@ defineModule(sim, list(
                            "be used for the calculations?")),
     defineParameter("shpFieldToUse", "character", "REGION_NAM", NA, NA, 
                     paste0("Which field of the shapefile indicates spatial",
-                           "units to be used for plotting and summarizing?"))
+                           "units to be used for plotting and summarizing?")),
+    defineParameter("percentToDiscard", "numeric", 0.3, NA, NA, 
+                    paste0("What is the proportion of bird abundance values that should",
+                           " be discarded to consider presence and absence? Defaults to 30% - 0.3",
+                           ""))
   ),
   inputObjects = bind_rows(
     expectsInput(objectName = "dataFolder", objectClass = "list", 
@@ -114,7 +106,7 @@ defineModule(sim, list(
                  sourceURL = NA),
     expectsInput(objectName = "listOfRasters", objectClass = "list", 
                  desc = paste0("This is a named 3 level list of the ",
-                               # originalDateAnalysis --> comparison --> runs --> birdModels
+                               # originalDateAnalysis --> comparison --> runs --> birdModels # <== THIS CHANGED! CONFIRM THE ORDER!
                                "1) location or simulation type, 2) objects to lapply ",
                                "through (i.e. can be a list of bird species, which one ",
                                "containing the 3) time series of rasters to analyze). ",
@@ -128,11 +120,17 @@ defineModule(sim, list(
                  sourceURL = NA),
     expectsInput(objectName = "comparisons", objectClass = "list", 
                  desc = paste0("This is a named list of the comparisons to make ",
-                               "(i.e. LandR.CS_fS and LandR_SCFM)"),
+                               "(i.e. LandR.CS_fS and LandR_SCFM)", 
+                               "IMPORTANT: In the comparisons, always the climate sensitives",
+                               " need to come first! This is expected by the internal functions"),
                  sourceURL = NA),
     expectsInput(objectName = "predictedRastersFolder", objectClass = "character", 
                  desc = paste0("This is the path to the folder that holds the predicted rasters ",
                                "(i.e. ~/projects/NWT/outputs/DDMMMYY)"),
+                 sourceURL = NA),
+    expectsInput(objectName = "studyAreaPosthoc", objectClass = "SpatialPolygonsDataFrame", 
+                 desc = paste0("Shapefile to be used to summarize the results for tables ",
+                               "and plots"),
                  sourceURL = NA)
   ),
   outputObjects = bind_rows(
@@ -173,23 +171,29 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
           sep = "\n")
       
       # schedule future event(s)
+      if ("makeDeltaRasters" %in% P(sim)$eventsToSchedule){
       sim <- scheduleEvent(sim, start(sim), "posthocBirdsNWT", "makeDeltaRasters")
-      if (P(sim)$calculateSignificantChanges){
+      }
+      if ("calculatesSignificantChanges" %in% P(sim)$eventsToSchedule){
         sim <- scheduleEvent(sim, start(sim), "posthocBirdsNWT", "calculatesSignificantChanges")
       }
-      if (P(sim)$calculateSummary){
+      if ("makeSummary" %in% P(sim)$eventsToSchedule){
         sim <- scheduleEvent(sim, start(sim), "posthocBirdsNWT", "makeSummary")
       }
       # sim <- scheduleEvent(sim, start(sim), "posthocBirdsNWT", "makeGIF") # Currently not implemented
-      if (P(sim)$makeRSFLikePlot){
+      if ("generateRSFbinned" %in% P(sim)$eventsToSchedule){
         sim <- scheduleEvent(sim, start(sim), "posthocBirdsNWT", "generateRSFbinned")
       }
+      if ("averageThroughTimeComparison" %in% P(sim)$eventsToSchedule){
       sim <- scheduleEvent(sim, start(sim), "posthocBirdsNWT", "averageThroughTimeComparison")
+      }
     },
     makeDeltaRasters = {
-      sim$deltaRasters <- makeDeltaRasters(listOfRasters = sim$listOfRasters, 
-                                           relativeDelta = P(sim)$relativeDelta, 
+      message("Running makeDeltaRasters")
+      sim$deltaRasters <- makeDeltaRasters(listOfRasters = sim$listOfRasters,
+                                           relativeDelta = P(sim)$relativeDelta,
                                            years = P(sim)$years,
+                                           species = P(sim)$species,
                                            outputFolder = Paths$outputPath,
                                            upload = P(sim)$uploadPlots,
                                            folderID = sim$googleFolders,
@@ -198,28 +202,28 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
       
       # This is the delta between the first (i.e. 2011) and last (i.e. 2100) layers, 
       # for each species, scenario (CC and noCC),
-      # for each individual run!
-
-      colonizationRastersAndTable <- calcColonizationList(listOfRasters = sim$listOfRasters, 
+      # for each individual run! 
+      # # This will take 10 seconds per map = 64sp*2birdModels*4scenarios*10runs = @15hs
+            message("Running calcColonizationList")
+      sim$colonizationRasters <- calcColonizationList(listOfRasters = sim$listOfRasters, 
                                                years = P(sim)$years,
                                                species = P(sim)$species,
                                                outputFolder = Paths$outputPath,
-                                               comparisons = sim$comparisons[index],
+                                               comparisons = sim$comparisons,
                                                overwrite = P(sim)$overwriteColras,
-                                               useFuture = P(sim)$useFuture)
-      sim$colonizationRasters <- colonizationRastersAndTable[["colRasters"]] 
-      sim$colonizationTable <- colonizationRastersAndTable[["colTable"]]
-      
-      # UNFINISHED. This function will calculate which species colonized and which
-      # species disappeared from a pixel with time.
+                                               useFuture = P(sim)$useFuture,
+                                               percentToDiscard = P(sim)$percentToDiscard)
+      # This function will calculate which species colonized and which
+      # species disappeared from a pixel with time, considering the factorial example.
 
     },
     calculatesSignificantChanges = {
+      message("Running bootstrapPercentChanges")
       sim$significantChanges <- bootstrapPercentChanges2(listOfRasters = sim$listOfRasters,
                                                         years = P(sim)$years,
                                                         sampleSize = P(sim)$sampleSize, 
                                                         nBootReps = P(sim)$nBootReps,
-                                                        shp = sim$studyArea,
+                                                        shp = sim$studyAreaPosthoc,
                                                         species = P(sim)$species,
                                                         useFuture = P(sim)$useFuture,
                                                         simulationStamp = P(sim)$simulationStamp,
@@ -233,8 +237,8 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
       # per location, per scenario. 
     },
     makeSummary = {
-
-      sim$differenceRasters <- lapply(seq_along(sim$comparisons), function(index){ #future_
+      sim$differenceRasters <- lapply(seq_along(sim$comparisons), function(index){
+        message(paste0("Running makeDiffAnalysis for ", sim$comparisons[index]))
         diffRasters <- makeDiffAnalysis2(predictedRastersFolder = sim$predictedRastersFolder,
                                 resultsFolder = Paths$outputPath,
                                 allRasters = sim$birdRasters, # If NULL, the factorial rasters
@@ -243,7 +247,6 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
                                 Species = P(sim)$species,
                                 Year = P(sim)$years,
                                 typeOfSpecies = "bird",
-                                Scenario = sim$comparisons[[index]],
                                 SpeciesScenario = P(sim)$birdModels,
                                 comparisons = sim$comparisons[index],
                                 writeRas = TRUE,
@@ -252,20 +255,21 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
         )
       })
       names(sim$differenceRasters) <- names(sim$comparisons)
-      
+
       # This function calculates the differences between the scenarios 
       # (i.e. LandR.CS_fS and LandR_SCFM) BY run (it uses the 'run' to 
       # compare), and then it takes the average of the differences 
       # across runs and standard deviation in the form of maps.  
-
+      message("Running makeRastersSummary")
       sim$pixelsSummaries <- makeRastersSummary(listOfRasters = sim$listOfRasters,
-                                                studyArea = sim$studyArea,
+                                                studyArea = sim$studyAreaPosthoc,
+                                                species = P(sim)$species,
                                                 field = P(sim)$shpFieldToUse,
+                                                useFuture = P(sim)$useFuture,
                                                 years = P(sim)$years)
 
       # This function calculates the mean, sd, min, max, median of density 
       # for each scenario, run, year, and species BY location.  
-
     },
     makeGIF = {
       #TODO sim$gif Figure NOT YET IMPLEMENTED. 
@@ -273,17 +277,18 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
     },
 
     averageThroughTimeComparison = {
-      
-      sim$averageTimePlot <- makeAveragePlotTime(dataFolder = Paths$outputPath, 
+      message("Running makeAveragePlotTime")
+      sim$averageTimePlot <- makeAveragePlotTime(dataFolder = file.path(Paths$outputPath, "effectsRasters"),
                                                  Species = P(sim)$species,
                                                  scenarios = names(sim$comparisons),
                                                  years = P(sim)$years,
+                                                 useFuture = P(sim)$useFuture,
                                                  field = P(sim)$shpFieldToUse,
                                                  rasterToMatch = sim$rasterToMatch,
-                                                 shp = sim$studyArea,
+                                                 shp = sim$studyAreaPosthoc,
                                                  overwrite = FALSE)
       
-      # This plot shows the averaged effect (CC-noCC) mean over area (studyArea) across all runs.
+      # This plot shows the averaged effect (CC-noCC) mean over area (studyAreaPosthoc) across all runs.
       # It's important to note that there is a deviance (sd) already calculated, but the CI shown 
       # here is the deviance from the averaged mean (i.e. inside each polygon, I have lots of 
       # pixels and each pixel is a mean of the difference between CC-noCC, across all runs). 
@@ -292,9 +297,9 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
         # 2. the CI of the averaged mean is one color
         # 3. the averaged SD is a lighter colour
 # X. the min and max of that, is yet another one even lighter --> Way too much variation. Scratched!
-
-    sim$cummEffRas <- createCumEffRasters(species = P(sim)$species,
-                          rasFolder = Paths$outputPath)
+    # sim$cummEffRas <- createCumEffRasters(species = P(sim)$species,
+    #                       rasFolder = Paths$outputPath) 
+    #                       # ==> not done as needs to do it per year and per type of simulation!
     
     # These rasters per species show the (i) averaged effect of climate change across runs, and 
     # (ii) its deviation.
@@ -316,7 +321,7 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
       stop("You must supply either a listOfRasters or a dataFolder")
     }
   }
-  
+
   if(!suppliedElsewhere("listOfRasters", sim)){
     if(!suppliedElsewhere("dataFolder", sim)){
       stop("You must supply either a listOfRasters or a dataFolder")

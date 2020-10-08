@@ -1,4 +1,5 @@
 makeDeltaRasters <- function(listOfRasters, 
+                             species,
                              relativeDelta = TRUE, 
                              years = c(2000, 2100), 
                              outputFolder, lightLoad = TRUE,
@@ -8,12 +9,13 @@ makeDeltaRasters <- function(listOfRasters,
                              email = NULL,
                              useFuture = FALSE){
   
-  if (useFuture) plan("multiprocess") else plan("sequential")
   rastersOrganized <- lapply(X = names(listOfRasters), function(eachSimulation){
     runFiles <- lapply(X = names(listOfRasters[[eachSimulation]]), FUN = function(eachRun){
-      speciesFiles <- future_lapply(X = names(listOfRasters[[eachSimulation]][[eachRun]]), 
+      bmodFiles <- lapply(X = names(listOfRasters[[eachSimulation]][[eachRun]]), FUN = function(eachBirdMod){
+        if (useFuture) plan("multiprocess", workers = length(species)/2)
+      speciesFiles <- future_lapply(X = names(listOfRasters[[eachSimulation]][[eachRun]][[eachBirdMod]]),
                                     FUN = function(eachSpecies){
-      currentGroupsRas <- listOfRasters[[eachSimulation]][[eachRun]][[eachSpecies]]
+      currentGroupsRas <- listOfRasters[[eachSimulation]][[eachRun]][[eachBirdMod]][[eachSpecies]]
       firstRas <- currentGroupsRas[[1]]
       lastRas <- currentGroupsRas[[nlayers(currentGroupsRas)]]
       if (isTRUE(relativeDelta)){
@@ -22,11 +24,12 @@ makeDeltaRasters <- function(listOfRasters,
         denom <- 1
       }
       rasName <- file.path(outputFolder, 
-                           paste0(paste(eachSimulation, eachRun, eachSpecies, sep = "_"), "delta.tif"))
+                           paste0(paste(eachSimulation, eachRun, eachBirdMod, eachSpecies, sep = "_"), 
+                                  "delta.tif"))
       if (all(file.exists(rasName), !isTRUE(overwrite))){
         message(crayon::green(paste0(
-          "Delta maps exist for ", eachSpecies, " for ", eachRun, " for ", 
-          eachSimulation, ". Returning"
+          "Delta maps exist for ", eachSpecies, " for ", eachRun, " for ", eachBirdMod,
+          " for ", eachSimulation, ". Returning"
           ))) 
       } else {
         tic(paste0("Calculating delta maps for ", eachSpecies, " for ", 
@@ -52,8 +55,12 @@ makeDeltaRasters <- function(listOfRasters,
         return(raster::raster(rasName))
       }
       })
-      names(speciesFiles) <- names(listOfRasters[[eachSimulation]][[eachRun]])
+      plan("sequential")
+      names(speciesFiles) <- names(listOfRasters[[eachSimulation]][[eachRun]][[eachBirdMod]])
       return(speciesFiles)
+    })
+      names(bmodFiles) <- names(listOfRasters[[eachSimulation]][[eachRun]])
+      return(bmodFiles)      
     })
     names(runFiles) <- names(listOfRasters[[eachSimulation]])
     return(runFiles)

@@ -1,15 +1,21 @@
 makeRastersSummary <- function(listOfRasters, 
                                studyArea,
+                               species,
                                field,
+                               useFuture,
                                years = c(2000, 2100)){
-
-  wholeTable <- rbindlist(lapply(X = names(listOfRasters), FUN = function(simul){
-    simulLists <- listOfRasters[[simul]]
-    runList <- rbindlist(lapply(X = names(simulLists), FUN = function(RUN){
-      runList <- simulLists[[RUN]]
-      speciesList <- rbindlist(lapply(X = names(runList), FUN = function(species){
-        spStack <- runList[[species]]
-        stkVals <- data.table::data.table(raster::getValues(spStack))
+  if (!field %in% names(studyArea))
+    stop("The parameters shpFieldToUse is not a variable in studyArea")
+  if (useFuture) plan("multiprocess", workers = length(species)/2)
+  wholeTable <- rbindlist(future_lapply(X = names(listOfRasters), FUN = function(species){
+    speciesLists <- listOfRasters[[species]]
+    simulList <- rbindlist(lapply(X = names(speciesLists), FUN = function(simul){
+      simulList <- speciesLists[[simul]]
+      bmodList <- rbindlist(lapply(X = names(simulList), FUN = function(bmod){
+        bmodList <- simulList[[bmod]]
+        runsList <- rbindlist(lapply(X = names(bmodList), FUN = function(runs){
+          runsList <- bmodList[[runs]]
+        stkVals <- data.table::data.table(raster::getValues(runsList))
         dt <- rbindlist(lapply(X = names(stkVals), FUN = function(y){
           r <- stkVals[, ..y]
           YEAR <- as.numeric(usefulFuns::substrBoth(strng = y, 
@@ -17,14 +23,15 @@ makeRastersSummary <- function(listOfRasters,
                                                     fromEnd = TRUE))
           studyAreaDT <- convertSAtoDT(studyArea = studyArea, 
                                        field = field,
-                                       rasterToMatch = spStack[[1]])
+                                       rasterToMatch = runsList[[1]])
           rasList <- na.omit(cbind(r, studyAreaDT))
           dt <- rbindlist(lapply(X = na.omit(unique(studyAreaDT$location)), 
                                  FUN = function(locality){
             message(crayon::blue(paste0("Calculating summary for ", 
-                                        crayon::yellow(paste(simul, RUN, species, YEAR, locality,
+                                        crayon::yellow(paste(species, simul, bmod, runs, 
+                                                             YEAR, locality,
                                                              collapse = " ")))))
-            locName <- attr(studyAreaDT, "conversionTable") 
+            locName <- attr(studyAreaDT, "conversionTable")
             locName <- locName[regionID == locality, regionName]
             dt <- data.table(scenario = simul,
                              species = species,
@@ -41,10 +48,17 @@ makeRastersSummary <- function(listOfRasters,
           }))
         return(dt)
       }))
-      return(dt)
+        return(dt)
+        }))
+        return(runsList)
       }))
-      return(speciesList)
-      }))
+      return(bmodList)
     }))
+    return(simulList)
+  }))
+  plan("sequential")
+  savePath <- reproducible::checkPath(path = file.path(Paths$outputPath, "summaryRasters"), 
+                                      create = TRUE)
+  qs::qsave(wholeTable, file = file.path(savePath, "rastersSummaryTable.qs"))
   return(wholeTable)
 }

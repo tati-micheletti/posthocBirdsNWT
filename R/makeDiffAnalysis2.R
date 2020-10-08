@@ -32,24 +32,22 @@ makeDiffAnalysis2 <- function(predictedRastersFolder = file.path(getwd(), "outpu
                              overwrite = FALSE,
                              useFuture = FALSE, ...){
   
-  if (useFuture) plan("multiprocess") # else plan("sequential")
-  
   outputFolder <- checkPath(file.path(resultsFolder, "effectsRasters"), create = TRUE)
-  
   if (!is(comparisons, "list")|is.null(names(comparisons)))
     stop("Comparisons need to be a named list of what you are making the differences")
   if (length(comparisons[[names(comparisons)]])>2)
     stop("Comparisons can only be made for 2 groups for now")
-  
+  tic("All Raster loaded! Difference analysis finished: ")
   # allRasters: Flat unnamed list of all rasters that I want to compare
 if (is.null(allRasters)){
-  allRasters <- unlist(lapply(Species, function(species){ # future_lapply
-    birdRasters <- lapply(Year, function(year){ # future_lapply
+  if (useFuture) plan("multiprocess", workers = length(Species)/2)
+  allRasters <- unlist(future_lapply(Species, function(species){ # future_lapply
+    birdRasters <- lapply(Year, function(year){
       birdYearRasters <- lapply(Scenario, function(scenario){
         if (is.null(SpeciesScenario)) SpeciesScenario <- "NOT_AVAILABLE"
         birdYearScenario <- lapply(SpeciesScenario, function(speciesScenario){
           birdYearScenarioSpeciesScen <- lapply(Run, function(run){
-            if (SpeciesScenario == "NOT_AVAILABLE")
+            if (any(SpeciesScenario == "NOT_AVAILABLE"))
               speciesScenario <- ""
             ras <- file.path(predictedRastersFolder, scenario, 
                              run, paste0(typeOfSpecies, "Predictions", 
@@ -76,16 +74,16 @@ if (is.null(allRasters)){
       })
     })
   }))
-  
+  plan("sequential")
 }
-  
+  message(crayon::green("All Raster loaded! Starting difference analysis..."))
   # 3 birds x 4 years x 3 runs x 8 scenarios = 288 rasters
    
   # Only comparing the two extremes: LandR.CS + fS + V6a vs LandR + SCFM + V4
   # --> For paper: 64 birds x 6 years x 10 runs x 2 scenarios = 7,680 rasters
   
   # The full on:
-  # --> For paper: 64 birds x 6 years x 10 runs x 16 scenarios = 61,440 rasters
+  # --> For paper: 64 birds x 6 years x 10 runs x 8 scenarios = 30,720 rasters
   
   # 1 caribou x 3 years x 3 runs x 4 scenarios = 36 rasters
   # --> For paper: 1 caribou x 6 years x 10 runs x 2 scenarios = 120 rasters
@@ -94,7 +92,8 @@ if (is.null(allRasters)){
   names(allRasters) <- allRastersNames
   
   # lapply through birds, and then years for the difference maps
-  allSpeciesDiffMaps <- lapply(X = Species, FUN = function(species){# future_lapply
+    if (useFuture) plan("multiprocess", workers = length(Species)/2)
+  allSpeciesDiffMaps <- future_lapply(X = Species, FUN = function(species){
     message(crayon::yellow(paste0("Producing maps for ", species)))
     tic(paste0("All maps for ", species, " produced:"))
     oneSpecies <- allRasters[names(allRasters) %in% grepMulti(x = names(allRasters), 
@@ -144,6 +143,10 @@ if (is.null(allRasters)){
           })
         }))
         
+        browser() # Plot all the repetitions, and fit the model to the "raw" data, not the mean
+        # Of the area burned across all reps. Same for all the plots!
+        # Jitter/ density scatterplot, but not average!
+        
         oneRunNm <- unlist(lapply(oneRun, FUN = names))
         names(oneRun) <- oneRunNm
         message("Calculating average of raster differences for ", 
@@ -174,7 +177,9 @@ if (is.null(allRasters)){
     toc()
     return(oneYear)
   })
+  plan("sequential")
   names(allSpeciesDiffMaps) <- Species
+  toc()
   
   if (!returnAllRasters){
     return(allSpeciesDiffMaps)

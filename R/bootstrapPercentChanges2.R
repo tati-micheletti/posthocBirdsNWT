@@ -61,15 +61,14 @@ bootstrapPercentChanges2 <- function(dataPath = NULL,
     studyArea <- shp
   }
   
-  if (useFuture) plan("multiprocess") else plan("sequential")
-  
-  fullTable <- lapply(1:nBootReps, function(repetition){ # future_
+  fullTable <- future_lapply(1:nBootReps, function(repetition){ # future_
     message(crayon::yellow("Starting calculateSignificantChangesInBirds for repetition ",
                            repetition, " TIME: ", Sys.time()))
     t2 <- Sys.time()
     changesTableFile <- file.path(Paths$outputPath, paste0("changesTable_rep", repetition,".qs"))
     if (any(!file.exists(changesTableFile), overwrite)){
-      changesTable <- rbindlist(lapply(X = names(get(whichAnalysis)),
+      if (useFuture) plan("multiprocess", workers = length(species)/2)
+      changesTable <- rbindlist(future_lapply(X = names(get(whichAnalysis)),
                              FUN = .calculateSignificantChangesInBirds,
                              dtList = get(whichAnalysis),
                              whichAnalysis = whichAnalysis, 
@@ -85,6 +84,7 @@ bootstrapPercentChanges2 <- function(dataPath = NULL,
       changesTable[, repetition := unique(repetition)]
       qs::qsave(x = changesTable, file = changesTableFile)
       t2 <- Sys.time()
+      plan("sequential")
     } else {
       message(crayon::green("FOUND calculateSignificantChangesInBirds Table for repetition ",
                             repetition, " ELAPSED: ", Sys.time() - t2))

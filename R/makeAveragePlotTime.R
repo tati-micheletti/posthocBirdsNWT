@@ -3,6 +3,7 @@ makeAveragePlotTime <- function(dataFolder, # Where the mean rasters are (effect
                                 scenarios,
                                 years,
                                 field,
+                                useFuture,
                                 rasterToMatch,
                                 useGeneralNWTclass = FALSE,
                                 shp = NULL, 
@@ -11,13 +12,14 @@ makeAveragePlotTime <- function(dataFolder, # Where the mean rasters are (effect
                                 makeCumEffects = TRUE,
                                 makeCumEffectsByPolygon = TRUE,
                                 overwrite = FALSE){
-
+  
   averageTimePlotTablePath <- file.path(dataFolder, "birds_AverageTimePlotTable.rds")
   if (all(file.exists(averageTimePlotTablePath), !isTRUE(overwrite))){
     plotMaps <- readRDS(averageTimePlotTablePath)
   } else {
     plotMaps <- rbindlist(lapply(scenarios, FUN = function(scen){
-      plotMaps <- rbindlist(lapply(Species, FUN = function(sp){
+      if (useFuture) plan("multiprocess", workers = length(Species)/2)
+      plotMaps <- rbindlist(future_lapply(Species, FUN = function(sp){
         birdFiles <- grepMulti(x = list.files(dataFolder, full.names = T, recursive = TRUE), 
                                patterns = c(sp, scen, "_mean.tif"))
         if (length(birdFiles) == 0) return(NULL)
@@ -56,7 +58,7 @@ makeAveragePlotTime <- function(dataFolder, # Where the mean rasters are (effect
           }
             rasList <- na.omit(cbind(r, rSD, studyAreaDT))
             names(rasList) <- c("Mean", "SD", "location")
-            # locName <- attr(studyAreaDT, "conversionTable") # Misplaced
+            locName <- attr(studyAreaDT, "conversionTable")
             dt <- rbindlist(lapply(X = na.omit(unique(studyAreaDT$location)), 
                                    FUN = function(locality){
                                      species <- usefulFuns::substrBoth(strng = names(ras), 
@@ -88,36 +90,37 @@ makeAveragePlotTime <- function(dataFolder, # Where the mean rasters are (effect
         }))
         return(dt)
       }))
+      plan("sequential")
       return(plotMaps)
     }))
     saveRDS(plotMaps, file = averageTimePlotTablePath)
   }
-
+  
   # ~~~~~~~~~~~~~~~~~~~ INDIVIDUAL EFFECTS BY POLYGON
 
   if (makeIndividualEffectsByPolygon){
-    if (length(unique(plotMaps$scenarios)) == 2)
+    if (length(unique(plotMaps$scenario)) == 2)
       cols <- c("red4", "forestgreen") else 
-        if (length(unique(plotMaps$scenarios)) == 3) {
-        } else {
+        if (length(unique(plotMaps$scenario)) == 3) {
           cols <- c("steelblue3", "red4", "forestgreen")
+        } else {
+          cols <- c("steelblue3")
         }
-    cols <- c("steelblue3")
     allBirdsPlots <- lapply(Species, function(BIRD){
       birdTable <- plotMaps[species == BIRD,]
       p <-  ggplot(data = birdTable, aes(x = as.numeric(year), y = average,
-                                         group = scenarios)) +  
-        geom_ribbon(aes(fill = scenarios, ymin = (average - std),
+                                         group = scenario)) +  
+        geom_ribbon(aes(fill = scenario, ymin = (average - std),
                         ymax = (average + std)), alpha = 0.5) +
         scale_fill_manual(values = cols) +
-        geom_line(aes(color = scenarios)) +
+        geom_line(aes(color = scenario)) +
         scale_color_manual(values = cols) +
         scale_x_continuous(limits = c(2011, 2100)) +
         xlab(label = "years") +
         ylab(label = paste0("Averaged direct and indirect ",
                             "effects of climate on bird density")) +
         theme_bw() +
-        facet_grid(locationName ~ scenarios) + 
+        facet_grid(locationName ~ scenario) + 
         theme(legend.position = "none")
       ggsave(filename = file.path(dataFolder, paste0("averageTimePlot_", 
                                                      BIRD, "PerPolygon.png")), 
@@ -131,26 +134,27 @@ makeAveragePlotTime <- function(dataFolder, # Where the mean rasters are (effect
   # ~~~~~~~~~~~~~~~~~~~ INDIVIDUAL EFFECTS GENERAL
   
   if (makeIndividualEffects){
-    plotMaps[, c("minVal", "maxVal") := list(average-std, average+std)]
-    plotMaps <- melt(data = plotMaps, id.vars = c("species", "scenarios", 
+    birdTable <- data.table::copy(plotMaps)
+    birdTable[, c("minVal", "maxVal") := list(average-std, average+std)]    
+    birdTable <- melt(data = birdTable, id.vars = c("species", "scenario", 
                                                   "locationName", "average", 
                                                   "std", "year"), 
                      measure.vars = c("minVal", "maxVal"))
-    plotMaps[ , c("averagePols", "sdPols") := list(mean(average), sd(value)), 
-              by = c("species", "scenarios", "year")]
+    birdTable[ , c("averagePols", "sdPols") := list(mean(average), sd(value)), 
+              by = c("species", "scenario", "year")]
     cols <- c("steelblue3", "red4", "forestgreen")
-    p <-  ggplot(data = plotMaps, aes(x = as.numeric(year), y = average,
-                                      group = scenarios)) +  
-      geom_ribbon(aes(fill = scenarios, ymin = (average - std),
-                      ymax = (average + std)), alpha = 0.5) +
+    p <-  ggplot(data = birdTable, aes(x = as.numeric(year), y = averagePols,
+                                      group = scenario)) +  
+      geom_ribbon(aes(fill = scenario, ymin = (averagePols - sdPols),
+                      ymax = (averagePols + sdPols)), alpha = 0.5) +
       scale_fill_manual(values = cols) +
-      geom_line(aes(color = scenarios)) +
+      geom_line(aes(color = scenario)) +
       scale_color_manual(values = cols) +
       scale_x_continuous(limits = c(2011, 2100)) +
       xlab(label = "years") +
       ylab(label = "Averaged direct and indirect effects of climate on bird density") +
       theme_bw() +
-      facet_grid(species ~ scenarios) +
+      facet_grid(species ~ scenario) +
       theme(legend.position = "none")
     
     ggsave(filename = file.path(dataFolder, "averageTimePlot.png"), 
@@ -186,18 +190,32 @@ makeAveragePlotTime <- function(dataFolder, # Where the mean rasters are (effect
     names(convTable)[names(convTable) == "regionID"] <- "location"
     convTable[, regionName := NULL]
     plotMaps <- merge(plotMaps, convTable, by = "location")
+  } else {
+    region <- unique(shp[[field]])
   }
-  
   if (makeCumEffectsByPolygon){
     allBirdsPlots <- lapply(Species, function(BIRD){
       birdsByRegion <- lapply(unique(region), function(REGION){
-        birdTable <- plotMaps[species == BIRD & region == REGION]
-        p <-  ggplot(data = birdTable, aes(x = as.numeric(year), y = average,
+        birdTable <- plotMaps[species == BIRD]
+        birdTable[, c("minVal", "maxVal") := list(average-std, average+std)]    
+        birdTable <- melt(data = birdTable, id.vars = c("species", "scenario",
+                                                        "locationName", "average",
+                                                        "std", "year"),
+                          measure.vars = c("minVal", "maxVal"))
+        birdTable[ , c("averagePols", "sdPols") := list(mean(average), sd(value)), 
+                   by = c("species", "locationName", "year")]
+        maxMin <- birdTable[, c("species", "scenario", "locationName", "year", "variable", "value")]
+        maxMin <- dcast(maxMin, formula = species + scenario + locationName + year ~ variable)
+        birdTable <- unique(birdTable[, c("variable", "value") := NULL])
+        birdTable <- merge(birdTable, maxMin, by =  c("species", "scenario", "locationName", "year"))
+        
+        p <-  ggplot(data = birdTable, aes(x = as.numeric(year), y = averagePols,
                                            group = locationName)) +
-          geom_ribbon(aes(fill = locationName, ymin = lCI,
-                          ymax = uCI), alpha = 0.5) +
-          geom_ribbon(aes(fill = locationName, ymin = (average - std),
-                          ymax = (average + std)), alpha = 0.3) + 
+          # geom_ribbon(aes(fill = locationName, ymin = minVal,
+          #                 ymax = maxVal), alpha = 0.3) + # THERE IS STILL SMTH WRONG. THE VALUES
+          #                 ARE WRONG SOMEHOW
+          geom_ribbon(aes(fill = locationName, ymin = (averagePols - sdPols),
+                          ymax = (averagePols + sdPols)), alpha = 0.5) +
           # The smaller the alpha, the more transparent
           geom_line(aes(color = locationName)) +
           scale_x_continuous(limits = c(2011, 2100)) +
@@ -223,21 +241,28 @@ makeAveragePlotTime <- function(dataFolder, # Where the mean rasters are (effect
   # ~~~~~~~~~~~~~~~~~~~ CUMULATIVE EFFECTS
   
   if (makeCumEffects){
-
-    plotMaps[, c("minValCumm", "maxValCumm") := list(averagePols-sdPols, 
+    birdTable <- copy(plotMaps)
+    birdTable[, c("minVal", "maxVal") := list(average-std, average+std)]    
+    birdTable <- melt(data = birdTable, id.vars = c("species", "scenario",
+                                                    "locationName", "average",
+                                                    "std", "year"),
+                      measure.vars = c("minVal", "maxVal"))
+    birdTable[ , c("averagePols", "sdPols") := list(mean(average), sd(value)), 
+               by = c("species", "locationName", "year")]
+    birdTable[, c("minValCumm", "maxValCumm") := list(averagePols-sdPols, 
                                                      averagePols+sdPols)]
-    plotMaps <- melt(data = plotMaps, id.vars = c("species", "scenarios", 
+    birdTable <- melt(data = birdTable, id.vars = c("species", "scenario", 
                                                   "year", "averagePols"), 
                      measure.vars = c("minValCumm", "maxValCumm"))
-    plotMaps[ , c("averagePolsCumm", "sdPolsCumm") := list(mean(averagePols), 
+    birdTable[ , c("averagePolsCumm", "sdPolsCumm") := list(mean(averagePols), 
                                                            sd(value)), 
               by = c("species", "year")]
-    plotMaps <- unique(plotMaps, by = c("species", "year")) # Cleanup
-    plotMaps <- plotMaps[, c("averagePols", "variable", "value") := NULL] # Cleanup
+    birdTable <- unique(birdTable, by = c("species", "year")) # Cleanup
+    birdTable <- birdTable[, c("averagePols", "variable", "value") := NULL] # Cleanup
     # cols <- c("goldenrod2", "grey40", "darkorchid2")
     
     library(ggplot2)
-    p2 <- ggplot(data = plotMaps, aes(x = as.numeric(year), y = averagePolsCumm,
+    p2 <- ggplot(data = birdTable, aes(x = as.numeric(year), y = averagePolsCumm,
                                       group = species)) +  
       geom_ribbon(aes(fill = species, ymin = (averagePolsCumm - sdPolsCumm),
                       ymax = (averagePolsCumm + sdPolsCumm)), alpha = 0.5) +

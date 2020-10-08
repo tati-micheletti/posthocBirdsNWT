@@ -13,30 +13,67 @@ retrieveRasters <- function(dataFolder,
             dataFolders will be returned.", immediate. = TRUE)
     patternsToRetrieveRasters <- ".tif"
   }
-  rastersOrganized <- lapply(X = names(dataFolder), function(eachFolder){
-    runFiles <- lapply(X = names(dataFolder[[eachFolder]]), function(eachRun){
-      allFiles <- grepMulti(x = list.files(path = dataFolder[[eachFolder]][[eachRun]], 
-                                           full.names = TRUE), 
-                            patterns = patternsToRetrieveRasters)
-      groupFiles <- lapply(X = species, FUN = function(eachGroup){
-        filesPath <- grepMulti(x = allFiles, patterns = c(eachGroup, paste(years, collapse = "|")))
-        rastersTS <- raster::stack(lapply(X = years, FUN = function(eachTS){
-          rasPath <- grepMulti(x = filesPath, patterns = eachTS)
-          if (length(rasPath) == 0) 
-            stop("At least one of the rasters doesn't seem to exist for the year sequence provided. Please check your data")
-          ras <- raster::raster(rasPath)
-          names(ras) <- paste(eachFolder, eachGroup, eachTS, sep = "_")
-          return(ras)
-        })
-        )
-        return(rastersTS)
-      })
-      names(groupFiles) <- species
-      return(groupFiles)
-    })
-    names(runFiles) <- names(dataFolder[[eachFolder]])
-    return(runFiles)
-  })
-  names(rastersOrganized) <- names(dataFolder)
- return(rastersOrganized)
+  
+   rastersOrganized <- lapply(X = species, function(sp){
+     scenFiles <- lapply(X = names(dataFolder), function(eachScenario){
+       birdModels <- lapply(X = names(dataFolder[[eachScenario]]), function(bmod){
+         runModels <- lapply(X = names(dataFolder[[eachScenario]][[bmod]]), function(run){  
+            allFiles <- grepMulti(x = list.files(path = dataFolder[[eachScenario]][[bmod]][[run]],
+                                                 full.names = TRUE),
+                                  patterns = patternsToRetrieveRasters)
+         filesPath <- grepMulti(x = allFiles, patterns = c(sp, paste(years, collapse = "|")))
+         rastersTS <- raster::stack(lapply(X = years, FUN = function(eachTS){
+           rasPath <- grepMulti(x = filesPath, patterns = eachTS)
+           if (length(rasPath) == 0)
+             stop("At least one of the rasters doesn't seem to exist for the year sequence provided. Please check your data")
+           ras <- raster::raster(rasPath)
+           names(ras) <- paste(eachScenario, bmod, run, eachTS, sep = "_")
+           return(ras)
+         })
+         )
+         return(rastersTS)
+       })
+       names(runModels) <- names(dataFolder[[eachScenario]][[bmod]])
+       return(runModels)
+     })
+     names(birdModels) <- names(dataFolder[[eachScenario]])
+     return(birdModels)
+   })
+   names(scenFiles) <- names(dataFolder)
+  return(scenFiles)
+   })
+   names(rastersOrganized) <- species
+   return(rastersOrganized)
+  
+  
+ #  rastersOrganized <- lapply(X = names(dataFolder), function(eachFolder){
+ #    runFiles <- lapply(X = names(dataFolder[[eachFolder]]), function(eachRun){
+ #      birdModels <- lapply(X = names(dataFolder[[eachFolder]][[eachRun]]), function(bmod){
+ #        allFiles <- grepMulti(x = list.files(path = dataFolder[[eachFolder]][[eachRun]][[bmod]], 
+ #                                           full.names = TRUE), 
+ #                            patterns = patternsToRetrieveRasters)
+ #      groupFiles <- lapply(X = species, FUN = function(eachGroup){
+ #        filesPath <- grepMulti(x = allFiles, patterns = c(eachGroup, paste(years, collapse = "|")))
+ #        rastersTS <- raster::stack(lapply(X = years, FUN = function(eachTS){
+ #          rasPath <- grepMulti(x = filesPath, patterns = eachTS)
+ #          if (length(rasPath) == 0) 
+ #            stop("At least one of the rasters doesn't seem to exist for the year sequence provided. Please check your data")
+ #          ras <- raster::raster(rasPath)
+ #          names(ras) <- paste(eachFolder, eachGroup, eachTS, sep = "_")
+ #          return(ras)
+ #        })
+ #        )
+ #        return(rastersTS)
+ #      })
+ #      names(groupFiles) <- species
+ #      return(groupFiles)
+ #    })
+ #    names(birdModels) <- names(dataFolder[[eachFolder]][[eachRun]])
+ #    return(birdModels)
+ #  })
+ #  names(runFiles) <- names(dataFolder[[eachFolder]])
+ # return(runFiles)
+ #  })
+ #  names(rastersOrganized) <- names(dataFolder)
+ #  return(rastersOrganized)
 }
