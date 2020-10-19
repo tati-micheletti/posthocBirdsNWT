@@ -17,9 +17,9 @@ makeAveragePlotTime <- function(dataFolder, # Where the mean rasters are (effect
   if (all(file.exists(averageTimePlotTablePath), !isTRUE(overwrite))){
     plotMaps <- readRDS(averageTimePlotTablePath)
   } else {
-    plotMaps <- rbindlist(lapply(scenarios, FUN = function(scen){
-      if (useFuture) plan("multiprocess", workers = length(Species)/2)
-      plotMaps <- rbindlist(future_lapply(Species, FUN = function(sp){
+    plotMaps <- rbindlist(lapply(scenarios, FUN = function(scen){ # CAN ONLY USE 22 SPECIES AT A TIME, MAYBE LESS!
+      # if (useFuture) plan("multiprocess", workers = length(Species)/3) # <~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ future_lapply
+      plotMaps <- rbindlist(lapply(Species, FUN = function(sp){ # <~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ future_lapply
         birdFiles <- grepMulti(x = list.files(dataFolder, full.names = T, recursive = TRUE), 
                                patterns = c(sp, scen, "_mean.tif"))
         if (length(birdFiles) == 0) return(NULL)
@@ -97,7 +97,6 @@ makeAveragePlotTime <- function(dataFolder, # Where the mean rasters are (effect
   }
   
   # ~~~~~~~~~~~~~~~~~~~ INDIVIDUAL EFFECTS BY POLYGON
-
   if (makeIndividualEffectsByPolygon){
     if (length(unique(plotMaps$scenario)) == 2)
       cols <- c("red4", "forestgreen") else 
@@ -195,7 +194,6 @@ makeAveragePlotTime <- function(dataFolder, # Where the mean rasters are (effect
   }
   if (makeCumEffectsByPolygon){
     allBirdsPlots <- lapply(Species, function(BIRD){
-      birdsByRegion <- lapply(unique(region), function(REGION){
         birdTable <- plotMaps[species == BIRD]
         birdTable[, c("minVal", "maxVal") := list(average-std, average+std)]    
         birdTable <- melt(data = birdTable, id.vars = c("species", "scenario",
@@ -225,14 +223,12 @@ makeAveragePlotTime <- function(dataFolder, # Where the mean rasters are (effect
           theme_bw() +
           facet_grid(locationName ~ ., labeller = label_wrap_gen(width = 12)) +
           theme(legend.position = "none")
-        fileName <- file.path(dataFolder, paste0("averageTimePlot_", BIRD, "_", 
-                                                 REGION,"_PerPolygon.png"))
+        fileName <- file.path(dataFolder, paste0("averageTimePlot_", BIRD, 
+                                                 "_PerPolygon.png"))
         ggsave(filename = fileName,
                plot = p, device = "png")
         
         return(fileName)
-      })
-      return(birdsByRegion)
     })
     names(allBirdsPlots) <- Species
     return(allBirdsPlots)

@@ -14,7 +14,7 @@ makeDeltaRasters <- function(listOfRasters,
       bmodFiles <- lapply(X = names(listOfRasters[[eachSimulation]][[eachRun]]), FUN = function(eachBirdMod){
         if (useFuture) plan("multiprocess", workers = length(species)/2)
       speciesFiles <- future_lapply(X = names(listOfRasters[[eachSimulation]][[eachRun]][[eachBirdMod]]),
-                                    FUN = function(eachSpecies){
+                                    FUN = function(eachSpecies){ ########### future_lapply <~~~~~~~~~~~~~~~~~~~~
       currentGroupsRas <- listOfRasters[[eachSimulation]][[eachRun]][[eachBirdMod]][[eachSpecies]]
       firstRas <- currentGroupsRas[[1]]
       lastRas <- currentGroupsRas[[nlayers(currentGroupsRas)]]

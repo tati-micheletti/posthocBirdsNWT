@@ -13,9 +13,13 @@ retrieveRasters <- function(dataFolder,
             dataFolders will be returned.", immediate. = TRUE)
     patternsToRetrieveRasters <- ".tif"
   }
-  
    rastersOrganized <- lapply(X = species, function(sp){
      scenFiles <- lapply(X = names(dataFolder), function(eachScenario){
+       whichSP <- which(species == sp)
+      whichSCENARIO <- which(names(dataFolder) == eachScenario)
+       totalCompleted <- 100*((whichSP*whichSCENARIO)/(length(species)*length(names(dataFolder))))
+         message(paste0("Retrieving rasters for ", sp, " for ", eachScenario, ". COMPLETED: ",
+                        totalCompleted, "%"))
        birdModels <- lapply(X = names(dataFolder[[eachScenario]]), function(bmod){
          runModels <- lapply(X = names(dataFolder[[eachScenario]][[bmod]]), function(run){  
             allFiles <- grepMulti(x = list.files(path = dataFolder[[eachScenario]][[bmod]][[run]],

@@ -237,24 +237,24 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
       # per location, per scenario. 
     },
     makeSummary = {
-      sim$differenceRasters <- lapply(seq_along(sim$comparisons), function(index){
-        message(paste0("Running makeDiffAnalysis for ", sim$comparisons[index]))
-        diffRasters <- makeDiffAnalysis2(predictedRastersFolder = sim$predictedRastersFolder,
-                                resultsFolder = Paths$outputPath,
-                                allRasters = sim$birdRasters, # If NULL, the factorial rasters
-                                # based on the arguments below are loaded
-                                Run = P(sim)$runs,
-                                Species = P(sim)$species,
-                                Year = P(sim)$years,
-                                typeOfSpecies = "bird",
-                                SpeciesScenario = P(sim)$birdModels,
-                                comparisons = sim$comparisons[index],
-                                writeRas = TRUE,
-                                useFuture = P(sim)$useFuture
-                                # , overwrite = TRUE
-        )
-      })
-      names(sim$differenceRasters) <- names(sim$comparisons)
+      # sim$differenceRasters <- lapply(seq_along(sim$comparisons), function(index){
+      #   message(paste0("Running makeDiffAnalysis for ", sim$comparisons[index]))
+      #   diffRasters <- makeDiffAnalysis2(predictedRastersFolder = sim$predictedRastersFolder,
+      #                           resultsFolder = Paths$outputPath,
+      #                           allRasters = sim$birdRasters, # If NULL, the factorial rasters
+      #                           # based on the arguments below are loaded
+      #                           Run = P(sim)$runs,
+      #                           Species = P(sim)$species,
+      #                           Year = P(sim)$years,
+      #                           typeOfSpecies = "bird",
+      #                           SpeciesScenario = P(sim)$birdModels,
+      #                           comparisons = sim$comparisons[index],
+      #                           writeRas = TRUE,
+      #                           useFuture = P(sim)$useFuture
+      #                           # , overwrite = TRUE
+      #   )
+      # })
+      # names(sim$differenceRasters) <- names(sim$comparisons)
 
       # This function calculates the differences between the scenarios 
       # (i.e. LandR.CS_fS and LandR_SCFM) BY run (it uses the 'run' to 
@@ -268,8 +268,12 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
                                                 useFuture = P(sim)$useFuture,
                                                 years = P(sim)$years)
 
-      # This function calculates the mean, sd, min, max, median of density 
-      # for each scenario, run, year, and species BY location.  
+      # This function returns individual pixel values  
+      # for each scenario, run, year, and species BY location.
+      # list of a DT for each species, with the following columns:
+      # pixelID, Year, Run, location, 
+      # LandR.CS_fS_V4, LandR.CS_SCFM_V4, LandR_fS_V4, LandR_SCFM_V4,
+      # LandR.CS_fS_V6a, LandR.CS_SCFM_V6a, LandR_fS_V6a, LandR_SCFM_V6a
     },
     makeGIF = {
       #TODO sim$gif Figure NOT YET IMPLEMENTED. 
@@ -277,16 +281,13 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
     },
 
     averageThroughTimeComparison = {
-      message("Running makeAveragePlotTime")
-      sim$averageTimePlot <- makeAveragePlotTime(dataFolder = file.path(Paths$outputPath, "effectsRasters"),
-                                                 Species = P(sim)$species,
-                                                 scenarios = names(sim$comparisons),
-                                                 years = P(sim)$years,
+      message("Running plotAbundanceThroughTime")
+      sim$averageTimePlot <- plotAbundanceThroughTime(pixelsSummaries = sim$pixelsSummaries,
                                                  useFuture = P(sim)$useFuture,
-                                                 field = P(sim)$shpFieldToUse,
-                                                 rasterToMatch = sim$rasterToMatch,
-                                                 shp = sim$studyAreaPosthoc,
-                                                 overwrite = FALSE)
+                                                 overwrite = FALSE,
+                                                 comparisons = sim$comparisons,
+                                                 locations = 1:length(unique(sim$studyAreaPosthoc[[P(sim)$shpFieldToUse]])),
+                                                 years = P(sim)$years)
       
       # This plot shows the averaged effect (CC-noCC) mean over area (studyAreaPosthoc) across all runs.
       # It's important to note that there is a deviance (sd) already calculated, but the CI shown 

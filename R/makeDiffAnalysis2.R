@@ -18,7 +18,7 @@
 
 
 
-makeDiffAnalysis2 <- function(predictedRastersFolder = file.path(getwd(), "outputs/06DEC19"),
+makeDiffAnalysis2 <- function(predictedRastersFolder = file.path(getwd(), "outputs/SIMULATIONS"),
                               resultsFolder = tempdir(),
                               allRasters = NULL, # If you want a factorial combination, just leave this NULL!
                              Species = c("CAWA", "OSFL", "RUBL"),
@@ -41,7 +41,7 @@ makeDiffAnalysis2 <- function(predictedRastersFolder = file.path(getwd(), "outpu
   # allRasters: Flat unnamed list of all rasters that I want to compare
 if (is.null(allRasters)){
   if (useFuture) plan("multiprocess", workers = length(Species)/2)
-  allRasters <- unlist(future_lapply(Species, function(species){ # future_lapply
+  allRasters <- unlist(future_lapply(Species, function(species){   ########### future_lapply <~~~~~~~~~~~~~~~~~~~~
     birdRasters <- lapply(Year, function(year){
       birdYearRasters <- lapply(Scenario, function(scenario){
         if (is.null(SpeciesScenario)) SpeciesScenario <- "NOT_AVAILABLE"
@@ -76,7 +76,7 @@ if (is.null(allRasters)){
   }))
   plan("sequential")
 }
-  message(crayon::green("All Raster loaded! Starting difference analysis..."))
+  message(crayon::green("All rasters loaded! Starting difference analysis..."))
   # 3 birds x 4 years x 3 runs x 8 scenarios = 288 rasters
    
   # Only comparing the two extremes: LandR.CS + fS + V6a vs LandR + SCFM + V4
@@ -92,8 +92,8 @@ if (is.null(allRasters)){
   names(allRasters) <- allRastersNames
   
   # lapply through birds, and then years for the difference maps
-    if (useFuture) plan("multiprocess", workers = length(Species)/2)
-  allSpeciesDiffMaps <- future_lapply(X = Species, FUN = function(species){
+    if (useFuture) plan("multiprocess", workers = length(Species)/2)  
+  allSpeciesDiffMaps <- future_lapply(X = Species, FUN = function(species){ ########### future_lapply <~~~~~~~~~~~~~~~~~~~~
     message(crayon::yellow(paste0("Producing maps for ", species)))
     tic(paste0("All maps for ", species, " produced:"))
     oneSpecies <- allRasters[names(allRasters) %in% grepMulti(x = names(allRasters), 
@@ -101,26 +101,32 @@ if (is.null(allRasters)){
     oneYear <- lapply(Year, FUN = function(year){
       tic(paste0("Producing maps for ", species, " for ", year))
       averageName <- paste0(species, year, names(comparisons), "_mean")
-      sdName <- paste0(species, year, names(comparisons), "_sd")
+      stkName <- paste0(species, year, names(comparisons), "_stk")
       if (all(file.exists(file.path(outputFolder, 
                                     paste0(averageName, ".tif"))), 
               file.exists(file.path(outputFolder,
-                                    paste0(sdName, ".tif"))))){
+                                    paste0(stkName, ".grd"))))){
         message(crayon::yellow(paste0("Difference maps for ", species, 
                                       " for year ", year,
                                       " for ", names(comparisons),  
                                       " comparison exist. Returning.")))
         return(list(averageDifference = file.path(outputFolder, 
                                                   paste0(averageName, ".tif")), 
-                    sdDifference = file.path(outputFolder,
-                                             paste0(sdName, ".tif"))))
+                    stackDifference = file.path(outputFolder,
+                                             paste0(stkName, ".grd"))))
       } else {
         oneYear <- oneSpecies[names(oneSpecies) %in% 
                                 grepMulti(x = names(oneSpecies), 
                                           patterns = year)]
         oneRun <- unlist(lapply(Run, FUN = function(run){# future_lapply
-          oneRun <- oneYear[names(oneYear) %in% 
-                              grepMulti(x = names(oneYear), patterns = run)]
+          if (run == "run1"){ # Remove run 10!
+            oneRun <- oneYear[names(oneYear) %in% 
+                                grepMulti(x = names(oneYear), patterns = run, unwanted = "run10")]
+          } else {
+            oneRun <- oneYear[names(oneYear) %in% 
+                                grepMulti(x = names(oneYear), patterns = run)]
+          }
+          
           group1 <- oneRun[names(oneRun) %in% 
                              grepMulti(x = names(oneRun),
                                        patterns = comparisons[[names(comparisons)]][1])]
@@ -143,20 +149,15 @@ if (is.null(allRasters)){
           })
         }))
         
-        browser() # Plot all the repetitions, and fit the model to the "raw" data, not the mean
-        # Of the area burned across all reps. Same for all the plots!
-        # Jitter/ density scatterplot, but not average!
-        
         oneRunNm <- unlist(lapply(oneRun, FUN = names))
         names(oneRun) <- oneRunNm
         message("Calculating average of raster differences for ", 
                 paste(species, year, names(comparisons), collapse = " "))
-        tic("Average and sd calculations")
-        averageReps <- calc(stack(oneRun), fun = mean, na.rm = TRUE)
-        sdReps <- calc(stack(oneRun), fun = sd, na.rm = TRUE)
+        tic("Average calculations...")
+        oneRunStk <- stack(oneRun)
+        averageReps <- calc(oneRunStk, fun = mean, na.rm = TRUE)
         names(averageReps) <- averageName
-        names(sdReps) <- sdName
-        toc()
+
           message("Writting rasters for ", paste(species, year, 
                                                  names(comparisons), 
                                                  collapse = " "))
@@ -164,13 +165,12 @@ if (is.null(allRasters)){
                                                             paste0(averageName, 
                                                                    ".tif")), 
                       format = "GTiff", overwrite = overwrite)
-          writeRaster(x = sdReps, filename = file.path(outputFolder, 
-                                                       paste0(sdName, 
-                                                              ".tif")), 
-                      format = "GTiff", overwrite = overwrite)
+          writeRaster(x = oneRunStk, filename = file.path(outputFolder, 
+                                                          stkName), 
+                      overwrite = overwrite)
         toc()
         return(list(averageDifference = averageName, 
-                    sdDifference = sdName))
+                    stackDifference = stkName))
       }
     })
     names(oneYear) <- paste0("Year", Year)

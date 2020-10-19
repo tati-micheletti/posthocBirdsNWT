@@ -8,8 +8,8 @@ calcColonizationList <- function(listOfRasters,
                                  percentToDiscard = 0.3){
   
   outputFolder <- checkPath(file.path(outputFolder, "colonization"), create = TRUE)
-  if (useFuture) plan("multiprocess", workers = length(species)/2)
-  allBirds <- future_lapply(names(listOfRasters), function(sp){
+  if (useFuture) plan("multiprocess", workers = length(species)/2) 
+  allBirds <- future_lapply(names(listOfRasters), function(sp){ ########### future_lapply <~~~~~~~~~~~~~~~~~~~~
     allScenarios <- lapply(names(listOfRasters[[sp]]), function(scenario){
       tic(paste0("Calculating colonization/extirpation for ", paste(sp, scenario, sep = " ")))
       allMods <- lapply(names(listOfRasters[[sp]][[scenario]]), function(bmod){
