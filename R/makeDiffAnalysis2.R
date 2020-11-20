@@ -40,7 +40,8 @@ makeDiffAnalysis2 <- function(predictedRastersFolder = file.path(getwd(), "outpu
   tic("All Raster loaded! Difference analysis finished: ")
   # allRasters: Flat unnamed list of all rasters that I want to compare
 if (is.null(allRasters)){
-  if (useFuture) plan("multiprocess", workers = length(Species)/2)
+  works <- round(length(Species)/2, 0)
+  if (useFuture) plan("multiprocess", workers = max(works, length(Species)))
   allRasters <- unlist(future_lapply(Species, function(species){   ########### future_lapply <~~~~~~~~~~~~~~~~~~~~
     birdRasters <- lapply(Year, function(year){
       birdYearRasters <- lapply(Scenario, function(scenario){
