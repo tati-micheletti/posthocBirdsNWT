@@ -285,9 +285,14 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
       sim$averageTimePlot <- plotAbundanceThroughTime(pixelsSummaries = sim$pixelsSummaries,
                                                  useFuture = P(sim)$useFuture,
                                                  overwrite = FALSE,
-                                                 comparisons = sim$comparisons,
+                                                 comparisons = c(sim$comparisons, 
+                                                                 list(netEffect = c("LandR.CS_fS_V6a", 
+                                                                                    "LandR_SCFM_V4"))), 
+                                                 # SHOULD TEST IF THIS WORKS WITH COLONIZATION TOO! 
+                                                 # CURRENTLY DOING A SPECIFIC ONE FOR NET EFFECT! 
                                                  locations = 1:length(unique(sim$studyAreaPosthoc[[P(sim)$shpFieldToUse]])),
-                                                 years = P(sim)$years)
+                                                 years = P(sim)$years,
+                                                 pathOutputs = Paths$outputPath)
       
       # This plot shows the averaged effect (CC-noCC) mean over area (studyAreaPosthoc) across all runs.
       # It's important to note that there is a deviance (sd) already calculated, but the CI shown 
