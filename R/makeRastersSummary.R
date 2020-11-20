@@ -6,9 +6,10 @@ makeRastersSummary <- function(listOfRasters,
                                years = c(2000, 2100)){
   if (!field %in% names(studyArea))
     stop("The parameters shpFieldToUse is not a variable in studyArea")
-  if (useFuture) plan("multiprocess", workers = length(species)/4)
+  works <- round(length(species)/4, 0)
+  if (useFuture) plan("multiprocess", workers = max(works, length(species)))
   wholeTable <- future_lapply(X = names(listOfRasters), FUN = function(species){ # future_lapply <~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    tic(paste0("Elapsed time for ", sp))
+    tic(paste0("Elapsed time for ", species))
     savePath <- reproducible::checkPath(path = file.path(Paths$outputPath, "summaryRasters"), 
                                         create = TRUE)
     speciesTable <- file.path(savePath, paste0(species,"_rastersSummaryTable.qs"))
@@ -17,7 +18,7 @@ makeRastersSummary <- function(listOfRasters,
     } else {
       speciesLists <- listOfRasters[[species]]
       simulList <- lapply(X = names(speciesLists), FUN = function(simul){
-        tic(paste0("Elapsed time for ", simul, " for ", sp))
+        tic(paste0("Elapsed time for ", simul, " for ", species))
         simulList <- speciesLists[[simul]]
         bmodList <- lapply(X = names(simulList), FUN = function(bmod){
           bmodList <- simulList[[bmod]]
@@ -41,7 +42,6 @@ makeRastersSummary <- function(listOfRasters,
                                              field = field,
                                              rasterToMatch = runsList[[1]])
                 LENGTH <- as.numeric(NROW(studyAreaDT))
-                # studyAreaDT[, pixelID := as.numeric(1:LENGTH)]
                 studyAreaDT$pixelID <- 1:LENGTH
                 rasList <- na.omit(cbind(r, studyAreaDT), cols = names(r))
                 setnames(x = rasList, 
