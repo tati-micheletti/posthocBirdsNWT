@@ -93,7 +93,7 @@ defineModule(sim, list(
                            " be discarded to consider presence and absence? Defaults to 30% - 0.3",
                            ""))
   ),
-  inputObjects = bind_rows(
+  inputObjects = bindrows(
     expectsInput(objectName = "dataFolder", objectClass = "list", 
                  desc = paste0("This is a named list of the folders where the results should be.",
                                " (i.e. `folders[['LandR.CS_fS']] = file.path(getwd(),",
@@ -133,7 +133,7 @@ defineModule(sim, list(
                                "and plots"),
                  sourceURL = NA)
   ),
-  outputObjects = bind_rows(
+  outputObjects = bindrows(
     createsOutput(objectName = "deltaRasters", objectClass = "list", 
                   desc = "List of delta rasters"),
     createsOutput(objectName = "significantChanges", objectClass = "list", 
