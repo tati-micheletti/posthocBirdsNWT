@@ -94,6 +94,12 @@ defineModule(sim, list(
                            ""))
   ),
   inputObjects = bindrows(
+    expectsInput(objectName = "tableThreshold", objectClass = "data.table", 
+                 desc = paste0("This is a data.table with a column 'spec' (species using",
+                               " the 4 letter code) and 'meanDensity' (for now, it is not flexible to ",
+                               "other metrics). It is used to determine the threshold for colonization",
+                               " and extirpation."),
+                 sourceURL = NA),
     expectsInput(objectName = "dataFolder", objectClass = "list", 
                  desc = paste0("This is a named list of the folders where the results should be.",
                                " (i.e. `folders[['LandR.CS_fS']] = file.path(getwd(),",
@@ -190,15 +196,15 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
     },
     makeDeltaRasters = {
       message("Running makeDeltaRasters")
-      sim$deltaRasters <- makeDeltaRasters(listOfRasters = sim$listOfRasters,
-                                           relativeDelta = P(sim)$relativeDelta,
-                                           years = P(sim)$years,
-                                           species = P(sim)$species,
-                                           outputFolder = Paths$outputPath,
-                                           upload = P(sim)$uploadPlots,
-                                           folderID = sim$googleFolders,
-                                           overwrite = P(sim)$overwriteDelta,
-                                           useFuture = P(sim)$useFuture)
+      # sim$deltaRasters <- makeDeltaRasters(listOfRasters = sim$listOfRasters,
+      #                                      relativeDelta = P(sim)$relativeDelta,
+      #                                      years = P(sim)$years,
+      #                                      species = P(sim)$species,
+      #                                      outputFolder = Paths$outputPath,
+      #                                      upload = P(sim)$uploadPlots,
+      #                                      folderID = sim$googleFolders,
+      #                                      overwrite = P(sim)$overwriteDelta,
+      #                                      useFuture = P(sim)$useFuture)
       
       # This is the delta between the first (i.e. 2011) and last (i.e. 2100) layers, 
       # for each species, scenario (CC and noCC),
@@ -210,6 +216,7 @@ doEvent.posthocBirdsNWT = function(sim, eventTime, eventType) {
                                                species = P(sim)$species,
                                                outputFolder = Paths$outputPath,
                                                comparisons = sim$comparisons,
+                                               tableThreshold = sim$tableThreshold,
                                                overwrite = P(sim)$overwriteColras,
                                                useFuture = P(sim)$useFuture,
                                                percentToDiscard = P(sim)$percentToDiscard)

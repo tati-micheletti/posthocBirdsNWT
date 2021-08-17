@@ -4,11 +4,12 @@ calcColonizationList <- function(listOfRasters,
                                  comparisons,
                                  outputFolder,
                                  overwrite,
+                                 tableThreshold,
                                  useFuture,
                                  percentToDiscard = 0.3){
   
   outputFolder <- checkPath(file.path(outputFolder, "colonization"), create = TRUE)
-  if (useFuture) plan("multiprocess", workers = length(species)/2) 
+  if (useFuture) plan("multiprocess", workers = round(length(species)/2, 0))
   allBirds <- future_lapply(names(listOfRasters), function(sp){ ########### future_lapply <~~~~~~~~~~~~~~~~~~~~
     allScenarios <- lapply(names(listOfRasters[[sp]]), function(scenario){
       tic(paste0("Calculating colonization/extirpation for ", paste(sp, scenario, sep = " ")))
@@ -19,6 +20,7 @@ calcColonizationList <- function(listOfRasters,
             rasStk <- listOfRasters[[sp]][[scenario]][[bmod]][[runs]]
             colRas <- calcColonization(rasT0Path = rasStk[[1]], 
                                        rasT1Path = rasStk[[nlayers(rasStk)]],
+                                       thresholdVal = tableThreshold[spec == sp, meanDensity],
                                        rasName = colRasPath)
           }
           return(raster::raster(paste0(colRasPath, ".tif")))
@@ -178,7 +180,7 @@ calcColonizationList <- function(listOfRasters,
   return(allBirds)
 }
 
-calcColonization <- function(rasT0Path, rasT1Path, 
+calcColonization <- function(rasT0Path, rasT1Path, thresholdVal,
                              percentToDiscard = 0.3, rasName){
   if (is(rasT0Path, "character")){
     rasT0Path <- raster::raster(rasT0Path)
@@ -186,9 +188,30 @@ calcColonization <- function(rasT0Path, rasT1Path,
   if (is(rasT1Path, "character")){
     rasT1Path <- raster::raster(rasT1Path)
   }
-  rasT0 <- .presenceAbsenceRas(rasT0Path, percentToDiscard)
-  rasT1 <- .presenceAbsenceRas(rasT1Path, percentToDiscard)
-  rasCol <- rasT1 - rasT0
+
+  # Because of the changes in the distribution of
+  # some species through time (from highly right skewed in 2011 to 
+  # flatterned in 2100, for example), we need to establish a cutoff
+  # value for zeros to try avoiding
+  # weird results for extreme birds (the ones that disappear and the 
+  # ones that appear in the study area) 
+  # [UPDATE] After chatting with Diana and Eliot, we decided that
+  # it would be better to follow a method that has already been published.
+  # So now we will bring a table with the cutoff values (Diana calculated these)
+  # instead of actually just cutting all values on 0.01 or making the discount %.
+  # Values below the threshold are 0, above the threshold are 1.
+  # rasT0Path[rasT0Path[] < 0.01] <- 0
+  # rasT1Path[rasT1Path[] < 0.01] <- 0
+  # rasT0 <- .presenceAbsenceRas(rasT0Path, percentToDiscard)
+  # rasT1 <- .presenceAbsenceRas(rasT1Path, percentToDiscard)
+  
+  rasT0Path[rasT0Path[] < thresholdVal] <- 0
+  rasT0Path[rasT0Path[] >= thresholdVal] <- 1
+  
+  rasT1Path[rasT1Path[] < thresholdVal] <- 0
+  rasT1Path[rasT1Path[] >= thresholdVal] <- 1
+  
+  rasCol <- rasT1Path - rasT0Path
   writeRaster(rasCol, filename = rasName, format = "GTiff")
   return(raster::raster(paste0(rasName, ".tif")))
 }
@@ -199,6 +222,8 @@ calcColonization <- function(rasT0Path, rasT1Path,
   CSdt <- na.omit(CSdt)
   data.table::setkey(CSdt, val)
   CSdt[, CUM := cumsum(val)]
+  if (sum(CSdt[["CUM"]]) == 0)
+    return(ras)
   CSdt[, CUMstd := CUM/sum(val)]
   CSdt[, PA := CUMstd > percentToDiscard]
   BIRDpres <- raster(ras)
